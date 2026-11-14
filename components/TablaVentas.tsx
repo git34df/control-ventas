@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import * as XLSX from 'xlsx';
 import { Download, Search, ChevronLeft, ChevronRight, Pencil, Trash2, X } from 'lucide-react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { useTheme } from 'next-themes';
@@ -153,7 +152,9 @@ export default function TablaVentas() {
     return Object.keys(conteo).reduce((a, b) => conteo[a] > conteo[b] ? a : b);
   };
 
-  const exportarExcel = () => {
+  const exportarExcel = async () => {
+    // Se carga solo al exportar, para no hacer más pesada la carga inicial de la página
+    const XLSX = await import('xlsx');
     const datosExportar = ventasFiltradas.map(v => {
       const fechaObj = new Date(v.fecha_venta + 'T00:00:00');
       const mesTexto = fechaObj.toLocaleDateString('es-ES', { month: 'long' });
