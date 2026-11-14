@@ -79,7 +79,7 @@ export default function Home() {
               <FormularioVenta onVentaExitosa={manejarVentaRegistrada}/>
             </div>
             <div className="lg:col-span-2">
-              <TablaVentas key={actualizarDisparador}/>
+              <TablaVentas recarga={actualizarDisparador}/>
             </div>
           </section>
         )}
