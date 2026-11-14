@@ -25,21 +25,32 @@ export default function TablaVentas() {
   const [editProducto, setEditProducto] = useState('');
   const [editIngreso, setEditIngreso] = useState('');
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
-  
+
+  const [mensajeError, setMensajeError] = useState('');
+  const [errorEdicion, setErrorEdicion] = useState('');
+
   const { theme } = useTheme();
 
   const cargarDatos = async () => {
     setCargando(true);
     let query = supabase.from('ventas').select('*');
     if (filtroMesAno) {
-      const [año, mes] = filtroMesAno.split('-');
-      query = query.gte('fecha_venta', `${año}-${mes}-01`).lte('fecha_venta', `${año}-${mes}-31`);
+      // Rango [día 1 del mes, día 1 del mes siguiente) para no generar fechas inválidas como 2026-02-31
+      const [año, mes] = filtroMesAno.split('-').map(Number);
+      const inicio = `${filtroMesAno}-01`;
+      const siguiente = mes === 12
+        ? `${año + 1}-01-01`
+        : `${año}-${String(mes + 1).padStart(2, '0')}-01`;
+      query = query.gte('fecha_venta', inicio).lt('fecha_venta', siguiente);
     }
     if (filtroProducto && filtroProducto !== 'Todos') {
       query = query.eq('producto', filtroProducto);
     }
     const { data, error } = await query.order('fecha_venta', { ascending: false });
-    if (!error && data) {
+    if (error) {
+      setMensajeError('No se pudieron cargar las ventas: ' + error.message);
+    } else {
+      setMensajeError('');
       setVentas(data);
       setProductosDisponibles(Array.from(new Set(data.map((v: any) => v.producto).filter(Boolean))) as string[]);
     }
@@ -52,12 +63,18 @@ export default function TablaVentas() {
 
   const eliminarVenta = async (id: string) => {
     if (!window.confirm('¿Estás seguro de que deseas eliminar este registro?')) return;
-    const { error } = await supabase.from('ventas').delete().eq('id', id);
-    if (!error) cargarDatos();
+    // .select() devuelve las filas afectadas: con RLS, un bloqueo no da error sino 0 filas
+    const { data, error } = await supabase.from('ventas').delete().eq('id', id).select();
+    if (error || !data?.length) {
+      setMensajeError('No se pudo eliminar la venta' + (error ? ': ' + error.message : ' (sin permisos o ya no existe).'));
+      return;
+    }
+    cargarDatos();
   };
 
   const abrirModalEdicion = (venta: any) => {
-    setVentaEditando(venta); 
+    setErrorEdicion('');
+    setVentaEditando(venta);
     setEditFecha(venta.fecha_venta); 
     setEditCategoria(venta.categoria || ''); 
     setEditProducto(venta.producto); 
@@ -67,16 +84,19 @@ export default function TablaVentas() {
   const guardarEdicion = async (e: React.FormEvent) => {
     e.preventDefault();
     setGuardandoEdicion(true);
-    const { error } = await supabase.from('ventas').update({ 
-      fecha_venta: editFecha, 
-      categoria: editCategoria, 
-      producto: editProducto, 
-      ingreso: parseFloat(editIngreso) 
-    }).eq('id', ventaEditando.id);
-    
-    if (!error) { 
-      setVentaEditando(null); 
-      cargarDatos(); 
+    setErrorEdicion('');
+    const { data, error } = await supabase.from('ventas').update({
+      fecha_venta: editFecha,
+      categoria: editCategoria,
+      producto: editProducto,
+      ingreso: parseFloat(editIngreso)
+    }).eq('id', ventaEditando.id).select();
+
+    if (error || !data?.length) {
+      setErrorEdicion('No se pudo guardar' + (error ? ': ' + error.message : ' (sin permisos o el registro ya no existe).'));
+    } else {
+      setVentaEditando(null);
+      cargarDatos();
     }
     setGuardandoEdicion(false);
   };
@@ -138,6 +158,12 @@ export default function TablaVentas() {
 
   return (
     <div className="space-y-6 relative">
+      {mensajeError && (
+        <div role="alert" className="flex justify-between items-start gap-3 p-3 rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-sm text-red-700 dark:text-red-300">
+          <span>{mensajeError}</span>
+          <button onClick={() => setMensajeError('')} aria-label="Cerrar aviso" className="shrink-0 hover:opacity-70"><X size={16} /></button>
+        </div>
+      )}
       <div className={`${cardClass} p-4 grid grid-cols-1 md:grid-cols-3 gap-4`}>
         <div>
           <label className={labelClass}>Año / Mes</label>
@@ -283,6 +309,7 @@ export default function TablaVentas() {
                 <label className={labelClass}>Ingreso (S/)</label>
                 <input type="number" step="0.01" required value={editIngreso} onChange={(e) => setEditIngreso(e.target.value)} className={inputClass} />
               </div>
+              {errorEdicion && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{errorEdicion}</p>}
               <div className="pt-2 flex gap-3">
                 <button type="button" onClick={() => setVentaEditando(null)} className="flex-1 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-300 font-semibold py-2 rounded-md hover:bg-gray-200 dark:hover:bg-slate-600 text-sm">Cancelar</button>
                 <button type="submit" disabled={guardandoEdicion} className="flex-1 bg-blue-600 text-white font-semibold py-2 rounded-md hover:bg-blue-700 text-sm">{guardandoEdicion ? 'Guardando...' : 'Guardar'}</button>
