@@ -302,7 +302,7 @@ export default function TablaVentas({ recarga = 0 }: { recarga?: number }) {
           </div>
         </div>
         <div className={`${cardClass} p-5 h-32`}>
-          <div><p className={labelClass}>Producto más vendido</p><h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1 truncate">{resumen.mas_vendido ?? 'Ninguno'}</h3></div>
+          <div><p className={labelClass}>Producto más vendido</p><h3 title={resumen.mas_vendido ?? undefined} className="text-base font-bold leading-snug text-gray-800 dark:text-white mt-1 line-clamp-3 break-words">{resumen.mas_vendido ?? 'Ninguno'}</h3></div>
         </div>
         <div className={`${cardClass} p-5 h-32`}>
           <div><p className={labelClass}>Transacciones</p><h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1">{resumen.transacciones}</h3></div>
