@@ -29,11 +29,16 @@ export default function TablaVentas() {
   const [mensajeError, setMensajeError] = useState('');
   const [errorEdicion, setErrorEdicion] = useState('');
 
-  const { theme } = useTheme();
+  // resolvedTheme da 'dark' o 'light' también cuando el tema elegido es 'system'
+  const { resolvedTheme } = useTheme();
+  const colorGrafico = resolvedTheme === 'dark' ? '#60a5fa' : '#2563eb';
 
   const cargarDatos = async () => {
     setCargando(true);
     let query = supabase.from('ventas').select('*');
+    // Lista de productos del desplegable: respeta el filtro de mes pero NO el de producto,
+    // para que al elegir uno se pueda seguir cambiando a los demás
+    let queryProductos = supabase.from('ventas').select('producto');
     if (filtroMesAno) {
       // Rango [día 1 del mes, día 1 del mes siguiente) para no generar fechas inválidas como 2026-02-31
       const [año, mes] = filtroMesAno.split('-').map(Number);
@@ -42,17 +47,25 @@ export default function TablaVentas() {
         ? `${año + 1}-01-01`
         : `${año}-${String(mes + 1).padStart(2, '0')}-01`;
       query = query.gte('fecha_venta', inicio).lt('fecha_venta', siguiente);
+      queryProductos = queryProductos.gte('fecha_venta', inicio).lt('fecha_venta', siguiente);
     }
     if (filtroProducto && filtroProducto !== 'Todos') {
       query = query.eq('producto', filtroProducto);
     }
-    const { data, error } = await query.order('fecha_venta', { ascending: false });
+    const [resVentas, resProductos] = await Promise.all([
+      query.order('fecha_venta', { ascending: false }),
+      queryProductos,
+    ]);
+    const error = resVentas.error || resProductos.error;
     if (error) {
       setMensajeError('No se pudieron cargar las ventas: ' + error.message);
     } else {
       setMensajeError('');
-      setVentas(data);
-      setProductosDisponibles(Array.from(new Set(data.map((v: any) => v.producto).filter(Boolean))) as string[]);
+      setVentas(resVentas.data);
+      const productos = new Set(resProductos.data.map((v) => v.producto).filter(Boolean) as string[]);
+      // Mantener el producto elegido aunque no tenga ventas en el mes seleccionado
+      if (filtroProducto !== 'Todos') productos.add(filtroProducto);
+      setProductosDisponibles(Array.from(productos).sort((a, b) => a.localeCompare(b)));
     }
     setCargando(false);
   };
@@ -83,13 +96,18 @@ export default function TablaVentas() {
 
   const guardarEdicion = async (e: React.FormEvent) => {
     e.preventDefault();
+    const monto = parseFloat(editIngreso);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      setErrorEdicion('El ingreso debe ser un número mayor que 0.');
+      return;
+    }
     setGuardandoEdicion(true);
     setErrorEdicion('');
     const { data, error } = await supabase.from('ventas').update({
       fecha_venta: editFecha,
       categoria: editCategoria,
       producto: editProducto,
-      ingreso: parseFloat(editIngreso)
+      ingreso: monto
     }).eq('id', ventaEditando.id).select();
 
     if (error || !data?.length) {
@@ -106,10 +124,12 @@ export default function TablaVentas() {
     return v.producto?.toLowerCase().includes(s) || v.categoria?.toLowerCase().includes(s) || v.fecha_venta?.includes(s);
   });
 
-  const indiceUltimoRegistro = pagina * registrosPorPagina;
+  const totalPaginas = Math.ceil(ventasFiltradas.length / registrosPorPagina) || 1;
+  // Si se borra el último registro de la última página, no quedarse en una página que ya no existe
+  const paginaActual = Math.min(pagina, totalPaginas);
+  const indiceUltimoRegistro = paginaActual * registrosPorPagina;
   const indicePrimerRegistro = indiceUltimoRegistro - registrosPorPagina;
   const registrosVisualizados = ventasFiltradas.slice(indicePrimerRegistro, indiceUltimoRegistro);
-  const totalPaginas = Math.ceil(ventasFiltradas.length / registrosPorPagina) || 1;
 
   let datosGrafico = Object.values(ventasFiltradas.reduce((acc: any, venta) => {
     const f = venta.fecha_venta;
@@ -204,14 +224,14 @@ export default function TablaVentas() {
                 <AreaChart data={datosGrafico}>
                   <defs>
                     <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={theme === 'dark' ? '#60a5fa' : '#2563eb'} stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor={theme === 'dark' ? '#60a5fa' : '#2563eb'} stopOpacity={0}/>
+                      <stop offset="5%" stopColor={colorGrafico} stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor={colorGrafico} stopOpacity={0}/>
                     </linearGradient>
                   </defs>
                   <Area 
                     type="monotone" 
                     dataKey="total" 
-                    stroke={theme === 'dark' ? '#60a5fa' : '#2563eb'} 
+                    stroke={colorGrafico}
                     strokeWidth={2} 
                     fillOpacity={1} 
                     fill="url(#colorTotal)" 
@@ -276,10 +296,10 @@ export default function TablaVentas() {
         
         {ventasFiltradas.length > registrosPorPagina && (
           <div className="p-3 border-t border-gray-100 dark:border-slate-700 flex justify-between items-center text-sm text-gray-550 dark:text-slate-400">
-            <span>Página {pagina} de {totalPaginas}</span>
+            <span>Página {paginaActual} de {totalPaginas}</span>
             <div className="flex gap-1">
-              <button onClick={() => setPagina(prev => Math.max(prev - 1, 1))} disabled={pagina === 1} className="p-1 border border-gray-200 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-40"><ChevronLeft size={16} /></button>
-              <button onClick={() => setPagina(prev => Math.min(prev + 1, totalPaginas))} disabled={pagina === totalPaginas} className="p-1 border border-gray-200 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-40"><ChevronRight size={16} /></button>
+              <button onClick={() => setPagina(Math.max(paginaActual - 1, 1))} disabled={paginaActual === 1} aria-label="Página anterior" className="p-1 border border-gray-200 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-40"><ChevronLeft size={16} /></button>
+              <button onClick={() => setPagina(Math.min(paginaActual + 1, totalPaginas))} disabled={paginaActual === totalPaginas} aria-label="Página siguiente" className="p-1 border border-gray-200 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-700 disabled:opacity-40"><ChevronRight size={16} /></button>
             </div>
           </div>
         )}
@@ -307,7 +327,7 @@ export default function TablaVentas() {
               </div>
               <div>
                 <label className={labelClass}>Ingreso (S/)</label>
-                <input type="number" step="0.01" required value={editIngreso} onChange={(e) => setEditIngreso(e.target.value)} className={inputClass} />
+                <input type="number" step="0.01" min="0.01" required value={editIngreso} onChange={(e) => setEditIngreso(e.target.value)} className={inputClass} />
               </div>
               {errorEdicion && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{errorEdicion}</p>}
               <div className="pt-2 flex gap-3">

@@ -54,12 +54,17 @@ export default function FormularioVenta({ onVentaExitosa }: { onVentaExitosa?: (
 
   const guardarVenta = async (e: React.FormEvent) => {
     e.preventDefault();
+    const monto = parseFloat(ingreso);
+    if (!Number.isFinite(monto) || monto <= 0) {
+      setEstado({ tipo: 'error', mensaje: 'El ingreso debe ser un número mayor que 0.' });
+      return;
+    }
     setEstado({ tipo: 'cargando', mensaje: 'Guardando...' });
-    const { error } = await supabase.from('ventas').insert([{ 
-      fecha_venta: fecha, 
-      categoria, 
-      producto, 
-      ingreso: parseFloat(ingreso) 
+    const { error } = await supabase.from('ventas').insert([{
+      fecha_venta: fecha,
+      categoria,
+      producto,
+      ingreso: monto
     }]);
 
     if (error) {
@@ -107,7 +112,7 @@ export default function FormularioVenta({ onVentaExitosa }: { onVentaExitosa?: (
 
       <div className="mb-6">
         <label className={labelClass}>Ingreso (S/)</label>
-        <input type="number" step="0.01" required placeholder="0.00" value={ingreso} onChange={(e) => setIngreso(e.target.value)} className={inputClass} />
+        <input type="number" step="0.01" min="0.01" required placeholder="0.00" value={ingreso} onChange={(e) => setIngreso(e.target.value)} className={inputClass} />
       </div>
 
       <button type="submit" disabled={estado.tipo === 'cargando'} className="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 dark:disabled:bg-slate-600 transition-colors text-sm">

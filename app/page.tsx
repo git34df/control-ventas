@@ -11,7 +11,8 @@ import Login from "../components/Login";
 
 export default function Home() {
   const [actualizarDisparador, setActualizarDisparador] = useState(0);
-  const { theme, setTheme } = useTheme();
+  // resolvedTheme da 'dark' o 'light' también cuando el tema elegido es 'system'
+  const { resolvedTheme, setTheme } = useTheme();
   const [montado, setMontado] = useState(false);
 
   const [sesion, setSesion] = useState<Session | null>(null);
@@ -48,11 +49,11 @@ export default function Home() {
           <div className="flex items-center gap-2">
             {montado && (
               <button
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
                 aria-label="Cambiar tema"
                 className="p-2.5 rounded-full bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 shadow-sm border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
               >
-                {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+                {resolvedTheme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
               </button>
             )}
             {sesion && (
